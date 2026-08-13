@@ -26,7 +26,7 @@ mlflow.set_tracking_uri("http://localhost:5068")
 mlflow.set_experiment("your-team-name")
 ```
 
-### When the MLFLow server is down (optional)
+### When the MLFlow server is down (optional)
 We'll make sure the server is running. Should you want to use the server after the hackathon, from the `../agentic_hackathon_aug_2026/mlflow_server/` run:
 
 ```bash
