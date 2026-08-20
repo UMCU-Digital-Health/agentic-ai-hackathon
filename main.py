@@ -1,4 +1,5 @@
 def main():
+    """Main function."""
     print("Hello from hackathon-agentic-ai!")
 
 
