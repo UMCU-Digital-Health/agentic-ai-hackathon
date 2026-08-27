@@ -27,7 +27,12 @@ import asyncio
 import os
 from collections import Counter
 from dataclasses import dataclass, field
+import mlflow
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field
+from pydantic_ai import Agent
+from pydantic_ai.capabilities import Thinking
+from pydantic_ai.models.openai import OpenAIResponsesModelSettings
 
 load_dotenv()  # Load environment variables from .env file
 import streamlit as st
@@ -36,6 +41,94 @@ from pydantic_ai import Agent, RunContext
 from pydantic_ai.messages import FunctionToolCallEvent, FunctionToolResultEvent
 from pydantic_ai.models.openai import OpenAIResponsesModelSettings
 
+class ReferralLetterData(BaseModel):
+    """Structured data extracted from a Dutch medical referral letter (verwijsbrief)."""
+
+    verwijsdatum_brief: str = Field(
+        default="Unknown",
+        description="Referral date of the letter (date format, e.g. 2024-01-15)",
+    )
+    bsn_patient: str = Field(
+        default="Unknown",
+        description="BSN (Burger Service Nummer) of the patient (numeric, 9 digits)",
+    )
+    voorletters_patient: str = Field(
+        default="Unknown",
+        description="Initials of the patient (e.g. J.A.)",
+    )
+    achternaam_patient: str = Field(
+        default="Unknown",
+        description="Last name of the patient",
+    )
+    geboortedatum_patient: str = Field(
+        default="Unknown",
+        description="Date of birth of the patient (date format, e.g. 1990-05-20)",
+    )
+    geslacht_patient: str = Field(
+        default="Unknown",
+        description="Gender of the patient (e.g. Man, Vrouw, Anders)",
+    )
+    telefoonnummer_patient: str = Field(
+        default="Unknown",
+        description="Phone number of the patient",
+    )
+    mailadres_patient: str = Field(
+        default="Unknown",
+        description="Email address of the patient",
+    )
+    adres_patient: str = Field(
+        default="Unknown",
+        description="Home address of the patient (street, house number, postal code, city)",
+    )
+    naam_instantie: str = Field(
+        default="Unknown",
+        description="Name of the referring institution / practice",
+    )
+    postcode_instantie: str = Field(
+        default="Unknown",
+        description="Postal code of the referring institution",
+    )
+    plaatsnaam_instantie: str = Field(
+        default="Unknown",
+        description="City of the referring institution",
+    )
+    achternaam_verwijzer: str = Field(
+        default="Unknown",
+        description="Last name of the referring physician",
+    )
+    agb_code_verwijzer: str = Field(
+        default="Unknown",
+        description="AGB code of the referring physician (8 digits)",
+    )
+    achternaam_huisarts: str = Field(
+        default="Unknown",
+        description="Last name of the general practitioner (huisarts)",
+    )
+    postcode_huisarts: str = Field(
+        default="Unknown",
+        description="Postal code of the general practitioner",
+    )
+    plaatsnaam_huisarts: str = Field(
+        default="Unknown",
+        description="City of the general practitioner",
+    )
+
+EXTRACTION_SYSTEM_PROMPT = """
+You are a specialist in extracting structured data from Dutch medical referral letters
+(verwijsbrieven). You will receive the text content of a referral letter and must extract
+all requested fields.
+
+Rules:
+- Extract ONLY information that is explicitly present in the letter.
+- Do NOT guess or fabricate any values.
+- If a field cannot be found in the letter, use the value "Unknown".
+- For dates, normalise to ISO format YYYY-MM-DD when possible.
+- For BSN, return only the digits (9 digits).
+- For AGB codes, return only the digits (8 digits).
+- The referring physician (verwijzer) and the general practitioner (huisarts) may or may
+  not be the same person. Extract them independently.
+- Be aware that letters may use varying layouts: tables, headers, free text, or a mix.
+"""
 
 deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "")
 
@@ -50,6 +143,7 @@ class TaskItem:
 class FileContext:
     content: str
     tasks: list[TaskItem] = field(default_factory=list)
+    extracted: ReferralLetterData = None 
 
 
 class TaskPlan(BaseModel):
@@ -62,30 +156,34 @@ settings = OpenAIResponsesModelSettings(
     openai_reasoning_summary="detailed",
 )
 
+# --- Extraction: pulls structured fields out of the referral letter ---
+extraction_agent = Agent(
+    f"azure:{deployment}",
+    instructions=EXTRACTION_SYSTEM_PROMPT,
+    capabilities=[Thinking()],
+    output_type=ReferralLetterData,
+    model_settings=settings,
+)
+
 # --- Planner: drafts a short checklist before any work starts ---
 planner_agent = Agent(
     f"azure:{deployment}",
     output_type=TaskPlan,
     model_settings=settings,
     instructions=(
-        "You are triaging a clinical referral letter for completeness before "
+        "You are triaging a Dutch referral letter for completeness before "
         "it reaches a specialist. Break the review into a short, ordered "
-        "checklist of 2-6 concrete checks covering both: "
+        "checklist of 2-6 concrete checks at at most 3 words each: "
         "(a) administrative completeness — e.g. patient identifiers, date of "
         "birth, referring clinician and practice details, contact "
         "information, date of the referral; and "
         "(b) clinical completeness — e.g. reason for referral, relevant "
         "history, current medications/allergies, examination or "
         "investigation findings, urgency. "
-        "Each check should be doable with one of these tools: "
-        "get_file_content, word_count, summarize_draft, "
-        "extract_keywords_draft, sentiment_draft, translate_draft. Keep each "
-        "check description short and actionable."
     ),
 )
 
-# --- Worker: created once, not on every rerun ---
-agent = Agent(
+OrchestratorAgent = Agent(
     f"azure:{deployment}",
     deps_type=FileContext,
     model_settings=settings,
@@ -96,15 +194,16 @@ agent = Agent(
         "guessing. For each check: call start_task(task_id) right before "
         "working on it, use whichever analysis tools it needs to inspect the "
         "letter, then call complete_task(task_id) right after. Work through "
-        "checks in order. When every check is done, give a concise final "
-        "completeness report: what is present, what is missing or unclear, "
-        "and whether the letter is ready to be actioned."
+        "checks in order. For missing information, you can try and use tools to " \
+        "figure out what is missing, but do not fabricate anything. If you cannot find a " \
+        "piece of information, mark the check as incomplete and move on. Use the extracted_data tool to figure out what data is present or missing" \
+        "The final output should be a short summary of the completeness of the letter, including any missing information and recommendations for follow-up. It goes" \
+        "into the patient portal, so keep it extremely short and consise. Do NOT include any info that is present, that is redundant."
     ),
 )
 
-
 # --- Tools (drafts: simple heuristics, not real services) ---
-@agent.tool
+@OrchestratorAgent.tool
 def start_task(ctx: RunContext[FileContext], task_id: int) -> str:
     """Mark a task as in progress. Call right before starting work on it."""
     if 0 <= task_id < len(ctx.deps.tasks):
@@ -113,7 +212,7 @@ def start_task(ctx: RunContext[FileContext], task_id: int) -> str:
     return f"No task with id {task_id}."
 
 
-@agent.tool
+@OrchestratorAgent.tool
 def complete_task(ctx: RunContext[FileContext], task_id: int) -> str:
     """Mark a task as done. Call right after finishing work on it."""
     if 0 <= task_id < len(ctx.deps.tasks):
@@ -122,50 +221,21 @@ def complete_task(ctx: RunContext[FileContext], task_id: int) -> str:
     return f"No task with id {task_id}."
 
 
-@agent.tool
+@OrchestratorAgent.tool
 def get_file_content(ctx: RunContext[FileContext]) -> str:
     """Return the full raw contents of the uploaded file."""
     return ctx.deps.content
 
 
-@agent.tool
+@OrchestratorAgent.tool
 def word_count(ctx: RunContext[FileContext]) -> int:
     """Count the number of words in the uploaded file."""
     return len(ctx.deps.content.split())
 
-
-@agent.tool
-def summarize_draft(ctx: RunContext[FileContext]) -> str:
-    """Draft summarizer: naive truncation, not a real summarization model."""
-    text = ctx.deps.content.strip()
-    return text[:280] + ("..." if len(text) > 280 else "")
-
-
-@agent.tool
-def extract_keywords_draft(ctx: RunContext[FileContext]) -> list[str]:
-    """Draft keyword extractor: most frequent long words, no NLP involved."""
-    words = [w.strip(".,!?;:\"'()").lower() for w in ctx.deps.content.split()]
-    words = [w for w in words if len(w) > 3]
-    return [w for w, _ in Counter(words).most_common(8)]
-
-
-@agent.tool
-def sentiment_draft(ctx: RunContext[FileContext]) -> str:
-    """Draft sentiment tool: keyword-counting heuristic, not a real classifier."""
-    text = ctx.deps.content.lower()
-    positive = sum(text.count(w) for w in ["good", "great", "excellent", "happy", "positive"])
-    negative = sum(text.count(w) for w in ["bad", "terrible", "sad", "negative", "poor"])
-    if positive > negative:
-        return "positive"
-    if negative > positive:
-        return "negative"
-    return "neutral"
-
-
-@agent.tool
-def translate_draft(ctx: RunContext[FileContext], target_language: str) -> str:
-    """Draft translator stub: not a real translation, just a placeholder."""
-    return f"[draft: translation to '{target_language}' not implemented yet]"
+@OrchestratorAgent.tool
+def extracted_data(ctx: RunContext[FileContext]) -> ReferralLetterData:
+    """Return the structured data extracted from the referral letter."""
+    return ctx.deps.extracted
 
 
 STATUS_ICON = {"pending": "⬜", "in_progress": "🔄", "done": "✅"}
@@ -189,9 +259,9 @@ async def run_agent_with_progress(
 ):
     activity: list[str] = []
 
-    async with agent.iter(user_prompt, deps=deps) as agent_run:
+    async with OrchestratorAgent.iter(user_prompt, deps=deps) as agent_run:
         async for node in agent_run:
-            if Agent.is_call_tools_node(node):
+            if OrchestratorAgent.is_call_tools_node(node):
                 async with node.stream(agent_run.ctx) as stream:
                     async for event in stream:
                         if isinstance(event, FunctionToolCallEvent):
@@ -208,9 +278,7 @@ async def run_agent_with_progress(
 
 
 REFERRAL_CHECK_REQUEST = (
-    "Check this referral letter for administrative completeness (patient "
-    "identifiers, date of birth, referring clinician and practice details, "
-    "contact information, date of referral) and clinical completeness "
+    "Check this referral letter for administrative completeness and clinical completeness "
     "(reason for referral, relevant history, current medications/allergies, "
     "examination or investigation findings, urgency)."
 )
@@ -226,13 +294,18 @@ if uploaded_file is not None:
         st.text(content)
 
     if st.button("Check completeness"):
+        with st.spinner("Extracting structured data from referral letter..."):
+            extracted = extraction_agent.run_sync(f"Referral letter:\n{content}").output
         with st.spinner("Drafting completeness checklist..."):
+            #run planner_agent with extracted data as context   
             plan = planner_agent.run_sync(
-                f"Referral letter:\n{content}\n\nRequest: {REFERRAL_CHECK_REQUEST}"
+                f"Referral letter:\n{content}\n\nRequest: {REFERRAL_CHECK_REQUEST}\n\n Extracted data:\n{extracted.model_dump()}"
             ).output
+
         deps = FileContext(
             content=content,
             tasks=[TaskItem(description=t) for t in plan.tasks],
+            extracted= extracted
         )
 
         st.subheader("Completeness checklist")
@@ -245,8 +318,12 @@ if uploaded_file is not None:
         render_activity(activity_placeholder, [])
 
         task_list_text = "\n".join(f"{i}. {t.description}" for i, t in enumerate(deps.tasks))
+
+        
+
         worker_prompt = (
             f"Checklist (0-indexed):\n{task_list_text}\n\n"
+            f"Extracted information (0-indexed):\n{task_list_text}\n\n"
             f"Request: {REFERRAL_CHECK_REQUEST}"
         )
 
