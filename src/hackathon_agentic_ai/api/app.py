@@ -2,7 +2,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, FastAPI
 
-from no_show_agent.api.pydantic_models import (
+from hackathon_agentic_ai.api.pydantic_models import (
     AgentJob,
     AgentJobInput,
     AgentJobStatus,
@@ -11,6 +11,7 @@ from no_show_agent.api.pydantic_models import (
     CalendarItemInput,
     Message,
     MessageInput,
+    MessageRole,
     WaitListItem,
     WaitListItemInput,
 )
@@ -38,8 +39,8 @@ async def get_waitlist_items() -> list[WaitListItem]:
     """
     # Placeholder for actual implementation
     return [
-        WaitListItem(id=1, name="John Doe", priority=1),
-        WaitListItem(id=2, name="Jane Smith", priority=2),
+        WaitListItem(id=1, patient_name="John Doe", patient_id=1, priority=1),
+        WaitListItem(id=2, patient_name="Jane Smith", patient_id=2, priority=2),
     ]
 
 
@@ -51,7 +52,7 @@ async def create_waitlist_item(item: WaitListItemInput) -> dict:
     confirmation message.
     """
     # Placeholder for actual implementation
-    return {"message": f"Waitlist item '{item.name}' created successfully."}
+    return {"message": f"Waitlist item '{item.patient_name}' created successfully."}
 
 
 @router.delete("/waitlist-items/{item_id}")
@@ -128,16 +129,45 @@ async def get_messages(patient_id: int) -> list[Message]:
         Message(
             id=1,
             patient_id=patient_id,
-            content="Your appointment is confirmed.",
+            role=MessageRole.ASSISTANT,
+            content="There is a new timeslot available for your appointment.",
             timestamp=datetime.now(),
         ),
         Message(
             id=2,
             patient_id=patient_id,
-            content="Your appointment has been canceled.",
+            role=MessageRole.USER,
+            content="Yes, I would like to reschedule my appointment.",
             timestamp=datetime.now(),
         ),
     ]
+
+
+@router.get("/recent-messages/{patient_id}/{message_id}")
+async def get_recent_messages(patient_id: int, message_id: int) -> list[Message]:
+    """
+    Endpoint to retrieve recent messages for a specific patient starting from a specific message ID.
+    Returns a list of messages in JSON format.
+    """
+
+    recent_messages = [
+        Message(
+            id=3,
+            patient_id=patient_id,
+            role=MessageRole.ASSISTANT,
+            content="Your appointment is confirmed.",
+            timestamp=datetime.now(),
+        ),
+        Message(
+            id=4,
+            patient_id=patient_id,
+            role=MessageRole.USER,
+            content="Thanks",
+            timestamp=datetime.now(),
+        ),
+    ]
+
+    return [msg for msg in recent_messages if msg.id > message_id]
 
 
 @router.post("/messages")
