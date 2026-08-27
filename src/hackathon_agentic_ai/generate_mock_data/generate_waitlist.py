@@ -8,6 +8,8 @@ Requires patients and calendar to already exist.
 import random
 
 from faker import Faker
+from sqlmodel import select
+
 from hackathon_agentic_ai.generate_mock_data.config import (
     APPOINTMENT_TYPES,
     N_WAITLIST_PATIENTS,
@@ -20,7 +22,6 @@ from hackathon_agentic_ai.generate_mock_data.db_models import (
     WaitlistStatus,
 )
 from hackathon_agentic_ai.generate_mock_data.db_setup import get_session
-from sqlmodel import select
 
 fake = Faker()
 Faker.seed(RANDOM_SEED)
@@ -57,6 +58,7 @@ def generate_waitlist():
                 waitlist_id=i,
                 patient_id=patient_id,
                 appointment_type=random.choice(APPOINTMENT_TYPES),
+                priority=random.choices([1, 2, 3, 4, 5], weights=[1, 2, 4, 2, 1])[0],
                 status=WaitlistStatus.waiting,
                 added_at=fake.date_time_between(start_date="-14d", end_date="-1h"),
             )

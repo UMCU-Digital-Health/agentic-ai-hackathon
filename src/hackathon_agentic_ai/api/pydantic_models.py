@@ -20,6 +20,13 @@ class AgentJobStatus(str, Enum):
     FAILED = "failed"
 
 
+class AgentJobType(str, Enum):
+    """Enumeration of possible agent job types."""
+
+    FIRST_ACTION = "first_action"
+    MESSAGE_RECEIVED = "message_received"
+
+
 class MessageRole(str, Enum):
     """Enumeration of possible message roles."""
 
@@ -95,7 +102,7 @@ class AgentJob(BaseModel):
     """Pydantic model representing an agent job."""
 
     id: int
-    job_type: str
+    job_type: AgentJobType
     status: AgentJobStatus
     created_at: datetime
     updated_at: datetime
@@ -104,4 +111,4 @@ class AgentJob(BaseModel):
 class AgentJobInput(BaseModel):
     """Pydantic model representing input data for an agent job."""
 
-    job_type: str
+    job_type: AgentJobType
