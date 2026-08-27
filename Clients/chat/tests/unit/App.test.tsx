@@ -1,22 +1,33 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
-import App from '../../src/App'
+import { describe, expect, it, vi } from 'vitest'
+import { App } from '../../src/app/App'
+import { renderWithProviders } from './helpers/renderWithProviders'
 
-describe('App', () => {
-  it('renders the heading', () => {
-    render(<App />)
-
-    expect(screen.getByRole('heading', { name: /get started/i })).toBeInTheDocument()
+describe('the chat app', () => {
+  it('renders the shell with the patient selector', async () => {
+    renderWithProviders(<App />)
+    expect(screen.getByRole('heading', { name: 'NoShow Chat' })).toBeInTheDocument()
+    expect(screen.getByTestId('patient-select')).toBeInTheDocument()
+    expect(screen.getByText(/select a patient/i)).toBeInTheDocument()
   })
 
-  it('increments the counter when clicked', async () => {
+  it('opens a deep-linked conversation', async () => {
+    window.history.replaceState(null, '', '/?patientId=1')
+    renderWithProviders(<App />)
+    expect(await screen.findByText('Wednesday 10:30 — shall I book it?')).toBeInTheDocument()
+    expect(await screen.findByDisplayValue('John Doe (#1)')).toBeInTheDocument()
+  })
+
+  it('switches patient from the dropdown and updates the URL', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    renderWithProviders(<App />)
+    const select = screen.getByRole('combobox', { name: 'Patient' })
+    await vi.waitFor(() => expect(select).toBeEnabled())
+    await user.click(select)
+    await user.click(await screen.findByRole('option', { name: 'Pieter de Vries (#3)' }))
 
-    const button = screen.getByRole('button', { name: /count is 0/i })
-    await user.click(button)
-
-    expect(screen.getByRole('button', { name: /count is 1/i })).toBeInTheDocument()
+    expect(window.location.search).toBe('?patientId=3')
+    expect(await screen.findByText('Hello Pieter, a new timeslot is available.')).toBeInTheDocument()
   })
 })

@@ -41,9 +41,20 @@ npx playwright install
 | `npm run test:coverage` | Unit tests with a v8 coverage report        |
 | `npm run test:e2e`      | Run Playwright tests (starts the dev server)|
 | `npm run test:e2e:ui`   | Playwright in UI mode                       |
+| `npm run dev:mock`      | Dev server with MSW mocks (no API needed)   |
+| `npm run gen:api`       | Regenerate `src/api/schema.d.ts` from the running API on 8080 |
 
 ## Layout
 
 - `tests/unit/` — unit tests (Vitest + Testing Library)
 - `tests/setup.ts` — Testing Library setup (jest-dom matchers, auto cleanup)
-- `tests/e2e/` — Playwright specs, run against the dev server on the app's port
+- `tests/e2e/` — Playwright specs, run against `dev:mock` on the app's port
+- `src/mocks/` — MSW handlers shared by Vitest and Playwright
+
+## Chat
+
+The chat selects a patient in the header dropdown (`?patientId=` in the URL)
+and polls `GET /api/v1/recent-messages/{patient_id}/{message_id}` every 2 s,
+where `message_id` is the highest id on screen (`-1` when empty). Run the API
+(`uv run python run/api.py`) and `npm run dev` in `chat`, then open
+http://localhost:5174/?patientId=1.

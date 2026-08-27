@@ -28,6 +28,13 @@ class MessageRole(str, Enum):
     ASSISTANT = "assistant"
 
 
+class Patient(BaseModel):
+    """Pydantic model representing a patient known to the system."""
+
+    id: int
+    name: str
+
+
 class WaitListItem(BaseModel):
     """Pydantic model representing a waitlist item."""
 

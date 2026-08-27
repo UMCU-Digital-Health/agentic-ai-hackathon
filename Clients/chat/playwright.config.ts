@@ -20,7 +20,9 @@ export default defineConfig({
     { name: 'webkit', use: { ...devices['Desktop Safari'] } },
   ],
   webServer: {
-    command: 'npm run dev',
+    // Mock mode serves the same MSW handlers the unit tests use, so the suite is
+    // deterministic and does not need the Python API on port 8080.
+    command: 'npm run dev:mock',
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,

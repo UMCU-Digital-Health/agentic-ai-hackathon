@@ -1,17 +1,18 @@
 from datetime import datetime
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
+from hackathon_agentic_ai.api import store
 from hackathon_agentic_ai.api.pydantic_models import (
     AgentJob,
     AgentJobInput,
     AgentJobStatus,
-    AppointmentStatus,
     CalendarItem,
     CalendarItemInput,
     Message,
     MessageInput,
-    MessageRole,
+    Patient,
     WaitListItem,
     WaitListItemInput,
 )
@@ -19,6 +20,23 @@ from hackathon_agentic_ai.api.pydantic_models import (
 VERSION = "0.0.1"
 
 app = FastAPI(title="No Show Agent API", version=VERSION)
+
+# Explicit origins: allow_origins=["*"] together with allow_credentials=True is
+# rejected by the browser, which is a confusing failure to debug. 5173/5174 are
+# the planner and chat dev servers, 4173/4174 their preview builds.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:4173",
+        "http://localhost:5174",
+        "http://localhost:4174",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 router = APIRouter(prefix="/api/v1")
 
 
@@ -37,22 +55,17 @@ async def get_waitlist_items() -> list[WaitListItem]:
     Endpoint to retrieve waitlist items.
     Returns a list of waitlist items in JSON format.
     """
-    # Placeholder for actual implementation
-    return [
-        WaitListItem(id=1, patient_name="John Doe", patient_id=1, priority=1),
-        WaitListItem(id=2, patient_name="Jane Smith", patient_id=2, priority=2),
-    ]
+    return list(store.waitlist_items)
 
 
 @router.post("/waitlist-items")
-async def create_waitlist_item(item: WaitListItemInput) -> dict:
+async def create_waitlist_item(item: WaitListItemInput) -> WaitListItem:
     """
     Endpoint to create a new waitlist item.
-    Accepts a WaitListItem object in the request body and returns a
-    confirmation message.
+    Accepts a WaitListItemInput object in the request body and returns the
+    created waitlist item, including its assigned id and priority.
     """
-    # Placeholder for actual implementation
-    return {"message": f"Waitlist item '{item.patient_name}' created successfully."}
+    return store.add_waitlist_item(item)
 
 
 @router.delete("/waitlist-items/{item_id}")
@@ -61,7 +74,10 @@ async def delete_waitlist_item(item_id: int) -> dict:
     Endpoint to delete a waitlist item by its ID.
     Returns a confirmation message upon successful deletion.
     """
-    # Placeholder for actual implementation
+    if not store.remove_waitlist_item(item_id):
+        raise HTTPException(
+            status_code=404, detail=f"Waitlist item {item_id} not found"
+        )
     return {"message": f"Waitlist item '{item_id}' deleted successfully."}
 
 
@@ -71,38 +87,32 @@ async def get_calendar_items() -> list[CalendarItem]:
     Endpoint to retrieve calendar items.
     Returns a list of calendar items in JSON format.
     """
-    # Placeholder for actual implementation
-    return [
-        CalendarItem(
-            id=1,
-            title="Appointment with John Doe",
-            patient_id=1,
-            patient_name="John Doe",
-            start_time=datetime.now(),
-            end_time=datetime.now(),
-            status=AppointmentStatus.SCHEDULED,
-        ),
-        CalendarItem(
-            id=2,
-            title="Appointment with Jane Smith",
-            patient_id=2,
-            patient_name="Jane Smith",
-            start_time=datetime.now(),
-            end_time=datetime.now(),
-            status=AppointmentStatus.CANCELED,
-        ),
-    ]
+    return list(store.calendar_items)
 
 
 @router.post("/calendar-items")
-async def create_calendar_item(item: CalendarItemInput) -> dict:
+async def create_calendar_item(item: CalendarItemInput) -> CalendarItem:
     """
     Endpoint to create a new calendar item.
-    Accepts a CalendarItem object in the request body and returns a
-    confirmation message.
+    Accepts a CalendarItemInput object in the request body and returns the
+    created calendar item, including its assigned id.
     """
-    # Placeholder for actual implementation
-    return {"message": f"Calendar item '{item.title}' created successfully."}
+    return store.add_calendar_item(item)
+
+
+@router.put("/calendar-items/{item_id}")
+async def update_calendar_item(item_id: int, item: CalendarItemInput) -> CalendarItem:
+    """
+    Endpoint to update an existing calendar item.
+    Replaces the calendar item identified by item_id with the supplied data
+    and returns the updated item.
+    """
+    updated = store.replace_calendar_item(item_id, item)
+    if updated is None:
+        raise HTTPException(
+            status_code=404, detail=f"Calendar item {item_id} not found"
+        )
+    return updated
 
 
 @router.delete("/calendar-items/{item_id}")
@@ -111,11 +121,23 @@ async def delete_calendar_item(item_id: int) -> dict:
     Endpoint to delete a calendar item by its ID.
     Returns a confirmation message upon successful deletion.
     """
-    # Placeholder for actual implementation
+    if not store.remove_calendar_item(item_id):
+        raise HTTPException(
+            status_code=404, detail=f"Calendar item {item_id} not found"
+        )
     return {
         "message": f"Calendar item '{item_id}' deleted successfully and "
         "agent job created."
     }
+
+
+@router.get("/patients")
+async def get_patients() -> list[Patient]:
+    """
+    Endpoint to retrieve all known patients (id and name), used by the chat
+    client to populate its patient selector.
+    """
+    return store.patients()
 
 
 @router.get("/messages/{patient_id}")
@@ -124,62 +146,26 @@ async def get_messages(patient_id: int) -> list[Message]:
     Endpoint to retrieve messages for a specific patient.
     Returns a list of messages in JSON format.
     """
-    # Placeholder for actual implementation
-    return [
-        Message(
-            id=1,
-            patient_id=patient_id,
-            role=MessageRole.ASSISTANT,
-            content="There is a new timeslot available for your appointment.",
-            timestamp=datetime.now(),
-        ),
-        Message(
-            id=2,
-            patient_id=patient_id,
-            role=MessageRole.USER,
-            content="Yes, I would like to reschedule my appointment.",
-            timestamp=datetime.now(),
-        ),
-    ]
+    return store.messages_for(patient_id)
 
 
 @router.get("/recent-messages/{patient_id}/{message_id}")
 async def get_recent_messages(patient_id: int, message_id: int) -> list[Message]:
     """
     Endpoint to retrieve recent messages for a specific patient starting from a specific message ID.
-    Returns a list of messages in JSON format.
+    Pass -1 to receive the full history. Returns a list of messages in JSON format.
     """
-
-    recent_messages = [
-        Message(
-            id=3,
-            patient_id=patient_id,
-            role=MessageRole.ASSISTANT,
-            content="Your appointment is confirmed.",
-            timestamp=datetime.now(),
-        ),
-        Message(
-            id=4,
-            patient_id=patient_id,
-            role=MessageRole.USER,
-            content="Thanks",
-            timestamp=datetime.now(),
-        ),
-    ]
-
-    return [msg for msg in recent_messages if msg.id > message_id]
+    return store.messages_after(patient_id, message_id)
 
 
 @router.post("/messages")
-async def create_message(message: MessageInput) -> dict:
+async def create_message(message: MessageInput) -> Message:
     """
     Endpoint to create a new message.
-    Accepts a Message object in the request body and returns a confirmation message.
+    Accepts a MessageInput object in the request body and returns the created
+    message, including its assigned id and timestamp.
     """
-    # Placeholder for actual implementation
-    return {
-        "message": f"Message for patient '{message.patient_id}' created successfully."
-    }
+    return store.add_message(message)
 
 
 @router.get("/agent-jobs")
