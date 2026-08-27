@@ -7,14 +7,14 @@ Mantine v9.5.2 carries as much of the UI as possible · the API is fixed on port
 **8080** · the API gains CORS and a `PUT /calendar-items/{id}` endpoint · the
 UMC palette from §3.1 stands as sampled · the waitlist is ordered by
 **`priority` ascending, i.e. highest priority first** (§5.3), superseding the
-brief's "sorted by datetime" · `patient_id` is being added to `WaitListItem` by
-someone else.
+brief's "sorted by datetime" · `@tabler/icons-react` is the icon library
+(§4.6) · `patient_id` has landed on `WaitListItem`.
 
 ---
 
 ## 1. Where we stand today
 
-### Backend (`src/no_show_agent/api/`)
+### Backend (`src/hackathon_agentic_ai/api/`)
 
 `app.py` exposes a FastAPI app with `VERSION = "0.0.1"` and a single router at
 `/api/v1`. Every handler returns hard-coded placeholder data — there is no
@@ -31,6 +31,7 @@ store, no persistence, no filtering. `run/api.py` now serves on a fixed
 | POST | `/api/v1/calendar-items` | `{"message": ...}` | body `CalendarItemInput` |
 | DELETE | `/api/v1/calendar-items/{id}` | `{"message": ...}` | message hints an agent job is created |
 | GET | `/api/v1/messages/{patient_id}` | `list[Message]` | |
+| GET | `/api/v1/recent-messages/{patient_id}/{message_id}` | `list[Message]` | added since the first draft; not needed by the planner |
 | POST | `/api/v1/messages` | `{"message": ...}` | |
 | GET/POST/DELETE | `/api/v1/agent-jobs[/{id}]` | `AgentJob` | not needed for v1 of the planner |
 
@@ -38,12 +39,14 @@ Models (`pydantic_models.py`) — the contract the client must honour:
 
 ```
 AppointmentStatus  = "scheduled" | "canceled"
-WaitListItem       { id: int, name: str, priority: int }
-WaitListItemInput  { name: str }
+WaitListItem       { id: int, patient_name: str, patient_id: int, priority: int }
+WaitListItemInput  { patient_name: str, patient_id: int }
 CalendarItem       { id, title, patient_id, patient_name, start_time: datetime,
                      end_time: datetime, status: AppointmentStatus }
 CalendarItemInput  { title, patient_id, start_time, end_time, status=scheduled }
-Message            { id, patient_id, content, timestamp }
+MessageRole        = "system" | "user" | "assistant"
+Message            { id, patient_id, role: MessageRole, content, timestamp }
+MessageInput       { patient_id, role, content }
 AgentJob           { id, job_type, status, created_at, updated_at }
 ```
 
@@ -72,7 +75,7 @@ firefox / webkit, auto-starts the dev server). Dev port pinned to **5173**
 Two are requested outright (CORS, `PUT`); the rest are what the brief needs and
 the API doesn't yet provide.
 
-### 2.1 CORS — `src/no_show_agent/api/app.py`
+### 2.1 CORS — `src/hackathon_agentic_ai/api/app.py`
 
 ```python
 from fastapi.middleware.cors import CORSMiddleware
@@ -130,15 +133,81 @@ own cached value over the stub's echo.
 
 | # | Gap | Impact | Handling |
 | --- | --- | --- | --- |
-| G1 | `POST` returns `{"message": str}`, not the created resource | Client never learns the new `id`; can't reconcile an optimistic insert | **Backend fix preferred** (return the model, as `PUT` now does). Interim: invalidate and refetch the list after every mutation |
-| G2 | `WaitListItem` has no `patient_id` — the drag-to-schedule flow needs one to build a `CalendarItemInput` | Phase 7 can't create a real appointment from a dropped waitlist card | **Being added to the model by someone else** — treat it as an incoming change, not our work. Until it lands, `useScheduleWaitlistItem` reads `item.patient_id ?? PLACEHOLDER_PATIENT_ID` behind a single constant, so adopting the real field is a one-line deletion. Re-run `npm run gen:api` once it ships and the type will tell you where to remove the fallback. `duration_minutes` and `created_at` are still worth requesting: the first would replace Phase 7's hardcoded 30-minute block, the second gives the card "waiting since" copy |
+| G1 | `POST` returns `{"message": str}`, not the created resource | Client never learns the new `id`; can't reconcile an optimistic insert | **Tracked as O3** (§2.4, §10). Interim: invalidate and refetch the list after every mutation |
+| ~~G2~~ | ~~`WaitListItem` has no `patient_id`~~ | — | **Resolved.** `WaitListItem` is now `{id, patient_name, patient_id, priority}` and `WaitListItemInput` is `{patient_name, patient_id}`, so Phase 7 builds a real `CalendarItemInput` from a dropped card with no placeholder. Note the field is `patient_name`, **not** `name`. Still worth requesting: `duration_minutes` (would replace Phase 7's hardcoded 30-minute block) and `created_at` ("waiting since" copy on the card) |
 | G3 | `GET /calendar-items` takes no `from`/`to` | Can't range-query per view | Fetch all, filter client-side — fine at hackathon volumes. Keep the TanStack query key shaped as `['calendar-items', {start, end}]` so adding `?start=&end=` later is a one-line change |
 | G4 | No "alternative slots" endpoint | The Edit modal must propose alternative datetimes | Compute client-side in `lib/slots.ts` from free gaps inside working hours. Future: `GET /calendar-items/{id}/alternatives` served by the agent |
 | G5 | Stub items have `start_time == end_time` (`datetime.now()` twice), no timezone | Zero-height events; naive-vs-aware comparison bugs | Enforce a minimum rendered height; treat naive datetimes as local time in exactly one place (`api/dates.ts`) and nowhere else |
 | G6 | `patient_name` exists but there's no patient endpoint | "Full info" in the modal is thin | Show `patient_name`, `patient_id`, status, times. Optionally lazy-load `GET /messages/{patient_id}` in the modal as patient context |
-| G7 | Two placeholder appointments only | You cannot eyeball a week grid with two zero-length events | Seed ~30 appointments across the current week with realistic durations. Highest-value 10 minutes of backend work in this plan |
+| G7 | Two placeholder appointments only | You cannot eyeball a week grid with two zero-length events | **Tracked as O4** (§2.5, §10). Highest-value 10 minutes of backend work in this plan |
 
-### 2.4 Vite proxy
+### 2.4 `POST` endpoints should return the created model (O3)
+
+Both create endpoints currently return `{"message": str}`, so the client never
+learns the new `id` and can't reconcile an optimistic insert. Mirror what `PUT`
+now does:
+
+```python
+@router.post("/calendar-items")
+async def create_calendar_item(item: CalendarItemInput) -> CalendarItem:
+    """
+    Endpoint to create a new calendar item.
+    Accepts a CalendarItemInput object in the request body and returns the
+    created calendar item.
+    """
+    # Placeholder for actual implementation
+    return CalendarItem(id=_next_id(), patient_name="John Doe", **item.model_dump())
+```
+
+Same shape for `POST /waitlist-items` → `WaitListItem`. This changes the
+response schema, so re-run `npm run gen:api` afterwards; the generated types
+will point at every call site that needs updating.
+
+### 2.5 Seed data (O4)
+
+Two appointments with `start_time == end_time` cannot exercise a week grid —
+no overlap layout, no drag targets, no zero-height guard, nothing to look at in
+a demo. Replace the stub list with ~30 appointments spread across the current
+week:
+
+```python
+from datetime import datetime, timedelta
+
+_TITLES = ["Intake", "Controle", "Nacontrole", "Telefonisch consult", "MRI-bespreking"]
+_PATIENTS = [(1, "John Doe"), (2, "Jane Smith"), (3, "Pieter de Vries"),
+             (4, "Fatima El Amrani"), (5, "Sanne Bakker")]
+
+
+def _seed_calendar_items() -> list[CalendarItem]:
+    """Build a week of demo appointments anchored on the current Monday."""
+    monday = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    monday -= timedelta(days=monday.weekday())
+    items: list[CalendarItem] = []
+    for day in range(5):  # Mon-Fri
+        for slot in range(6):
+            index = day * 6 + slot
+            patient_id, patient_name = _PATIENTS[index % len(_PATIENTS)]
+            start = monday + timedelta(days=day, hours=9 + slot, minutes=30 * (slot % 2))
+            items.append(
+                CalendarItem(
+                    id=index + 1,
+                    title=f"{_TITLES[index % len(_TITLES)]} - {patient_name}",
+                    patient_id=patient_id,
+                    patient_name=patient_name,
+                    start_time=start,
+                    end_time=start + timedelta(minutes=30 if index % 3 else 60),
+                    status=AppointmentStatus.CANCELED
+                    if index % 7 == 0
+                    else AppointmentStatus.SCHEDULED,
+                )
+            )
+    return items
+```
+
+Deliberately includes varied durations, a few canceled items, and two
+appointments per hour so the overlap layout gets exercised.
+
+### 2.6 Vite proxy
 
 With the API fixed on 8080, proxy in dev so the client only ever calls relative
 paths and CORS never enters the picture locally (the middleware above is still
@@ -276,7 +345,7 @@ Versions verified against npm on 27 August 2026.
 
 ```bash
 npm i @mantine/core@9.5.2 @mantine/hooks@9.5.2 @mantine/dates@9.5.2 \
-      @mantine/notifications@9.5.2 dayjs @tabler/icons-react \
+      @mantine/notifications@9.5.2 dayjs @tabler/icons-react@^3.46.0 \
       @fullcalendar/core@6.1.21 @fullcalendar/react@6.1.21 \
       @fullcalendar/daygrid@6.1.21 @fullcalendar/timegrid@6.1.21 \
       @fullcalendar/interaction@6.1.21 \
@@ -308,7 +377,7 @@ Choosing Mantine collapses several decisions from the previous revision:
 | App shell / collapsible sidebars | `AppShell` | hand-rolled CSS Grid |
 | Dropdown, modal, popover | `Menu`, `Modal`, `Popover` | Radix UI |
 | Mini month picker | `DatePicker` (`@mantine/dates`) | react-day-picker |
-| Icons | `@tabler/icons-react` | lucide-react |
+| Icons | `@tabler/icons-react` (§4.6) | lucide-react |
 | Collapse / persisted UI state | `useDisclosure`, `useLocalStorage` | zustand |
 | Toasts | `@mantine/notifications` | — |
 
@@ -354,6 +423,57 @@ and hands `.toDate()` across the boundary.
 4. Mantine's CSS resets the box model; import `tokens.css` *after* Mantine so
    our overrides win without `!important`.
 
+### 4.6 Icons — `@tabler/icons-react`
+
+Every icon in the app comes from `@tabler/icons-react` (pinned `^3.46.0`). It is
+Mantine's own icon set, so sizing, stroke weight, and optical alignment match
+Mantine's components without per-icon nudging, and it is what Mantine's docs
+examples use — worth something when you are copying a `Menu` or `Modal` example
+under time pressure.
+
+**House style.** `size={16}` inside Mantine `Button` / `Menu.Item` sections,
+`size={18}` for standalone `ActionIcon`s, `stroke={1.5}` throughout — Tabler's
+default stroke of `2` reads heavy next to Mantine's typography. Icons here are
+decorative, so the accessible name belongs on the interactive parent
+(`aria-label` on the `ActionIcon`), not on the SVG.
+
+**Icon map** — every name verified against 3.46.0:
+
+| Where | Icon |
+| --- | --- |
+| Header sidebar toggles | Mantine `Burger` (not an icon) |
+| Toolbar prev / next | `IconChevronLeft` / `IconChevronRight` |
+| Toolbar today | `IconCalendarEvent` |
+| Dropdown trigger | `IconChevronDown` |
+| Dropdown — Day | `IconColumns1` |
+| Dropdown — Three Day | `IconColumns3` |
+| Dropdown — Working Week | `IconColumns` |
+| Dropdown — Week | `IconCalendarWeek` |
+| Dropdown — Month | `IconCalendarMonth` |
+| Dropdown — List | `IconList` |
+| Appointment popover — time row | `IconClock` |
+| Appointment popover — patient row | `IconUser` |
+| Popover actions | `IconPencil` / `IconTrash` |
+| Waitlist card drag affordance | `IconGripVertical` |
+| Edit modal — proposed slot | `IconCalendarTime` |
+| Error `Alert` | `IconAlertCircle` |
+
+`IconColumns1` / `IconColumns3` / `IconColumns` give Day / Three Day / Working
+Week a consistent visual family, which is what the Outlook dropdown does.
+
+**Vite caveat.** The barrel import (`import { IconClock } from
+'@tabler/icons-react'`) pulls a very large module graph and can make the dev
+server crawl on first load. If you feel it, add the package to
+`optimizeDeps.include` in `vite.config.ts` so esbuild pre-bundles it once:
+
+```ts
+optimizeDeps: { include: ['@tabler/icons-react'] },
+```
+
+Production builds tree-shake correctly either way, so this is a dev-experience
+fix, not a bundle-size one. Keep the barrel import — deep per-icon paths are an
+unnecessary readability tax.
+
 ---
 
 ## 5. Two details worth specifying up front
@@ -374,7 +494,7 @@ the same time**, because range and view mode are orthogonal state.
   </Menu.Target>
   <Menu.Dropdown>
     <Menu.RadioGroup value={range} onChange={(v) => setRange(v as Range)}>
-      <Menu.RadioItem value="day"      leftSection={<IconLayoutColumns size={16} />}>Day</Menu.RadioItem>
+      <Menu.RadioItem value="day"      leftSection={<IconColumns1 size={16} />}>Day</Menu.RadioItem>
       <Menu.RadioItem value="threeDay" leftSection={<IconColumns3 size={16} />}>Three Day</Menu.RadioItem>
       <Menu.RadioItem value="workWeek" leftSection={<IconColumns size={16} />}>Working Week</Menu.RadioItem>
       <Menu.RadioItem value="week"     leftSection={<IconCalendarWeek size={16} />}>Week</Menu.RadioItem>
@@ -511,15 +631,44 @@ naive backend datetime means.
 Each phase is independently demoable — which matters if the hackathon clock runs out.
 
 ### Phase 0 — Backend (~40 min)
-1. Add `CORSMiddleware` (§2.1).
-2. Add `PUT /calendar-items/{item_id}` (§2.2).
-3. Return created models from the `POST` endpoints (G1).
-4. *(Someone else)* `patient_id` on `WaitListItem` — not our task, but
-   coordinate on timing: Phase 7 uses a placeholder until it lands (G2).
-5. Seed ~30 realistic appointments across the current week (G7).
 
-Verify with `curl localhost:8080/openapi.json | jq '.paths | keys'` — that same
-document feeds the client's type generation.
+The four open items from §11, in the order they unblock client work. All four
+live in `src/hackathon_agentic_ai/api/app.py`.
+
+1. **O4 — seed data** (§2.5). Do this *first*: it costs ten minutes and every
+   later phase is easier to eyeball with a full week on screen.
+2. **O1 — `CORSMiddleware`** (§2.1).
+3. **O2 — `PUT /calendar-items/{item_id}`** (§2.2).
+4. **O3 — `POST` returns the created model** (§2.4).
+
+Verify each one before moving on:
+
+```bash
+uv run python run/api.py &                                   # port 8080
+
+curl -s localhost:8080/openapi.json | jq '.paths | keys'     # O2: put path present?
+curl -s localhost:8080/api/v1/calendar-items | jq 'length'   # O4: ~30, not 2
+curl -s localhost:8080/api/v1/calendar-items \
+  | jq '.[0] | .start_time != .end_time'                     # O4: true
+
+curl -si -X OPTIONS localhost:8080/api/v1/calendar-items \
+  -H 'Origin: http://localhost:5173' \
+  -H 'Access-Control-Request-Method: PUT' \
+  | grep -i access-control-allow                             # O1: headers present
+
+curl -s -X PUT localhost:8080/api/v1/calendar-items/1 \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"t","patient_id":1,"start_time":"2026-08-27T09:00:00","end_time":"2026-08-27T09:30:00","status":"scheduled"}' \
+  | jq '.id'                                                 # O2: returns the item, not a message
+```
+
+Then regenerate the client types — `npm run gen:api` — since O2 and O3 both
+change the OpenAPI document.
+
+**If Phase 0 slips, don't wait.** Point the client at MSW (§4.4) with handlers
+matching the *target* shapes above and keep building. The handoff is a base-URL
+change, and the MSW handlers are worth writing regardless because the tests need
+them.
 
 ### Phase 1 — Shell and theme
 Delete the Vite demo (`App.tsx`, `App.css`, `src/assets/*`, and the two scaffold
@@ -531,7 +680,7 @@ Planner" title and two `Burger`s, `Navbar` with the Today button and
 **Done when** the screenshot layout is recognisable and both sidebars collapse.
 
 ### Phase 2 — Data layer
-`npm run gen:api` → `schema.d.ts`. Write `client.ts`, `dates.ts`, the query
+*Needs O1 (or the Vite proxy) and O4.* `npm run gen:api` → `schema.d.ts`. Write `client.ts`, `dates.ts`, the query
 hooks, and the `QueryClient` (`staleTime: 30_000`). Render the waitlist as
 `Card`s in the `Aside`, ordered with `sortWaitlist` from §5.3 (`priority`
 ascending — rank 1 first — with `id` ascending as tie-breaker), headed
@@ -559,6 +708,7 @@ our tokens in `fullcalendar-overrides.css` rather than fighting selector
 specificity. Custom `eventContent` renders the chip (title, time, patient).
 
 ### Phase 6 — Popover, delete, edit
+*Needs O2 for the reschedule; the popover and delete work without it.*
 Clicking an event (calendar **or** list row) opens the
 `examples/outlook_edit_appointment.png` layout — `Popover` anchored to the chip
 in calendar view, `Modal` in list view. Content: colour dot, title, clock icon +
@@ -569,6 +719,8 @@ full date + `09:00 to 16:20`, `patient_name` / `patient_id`, status `Badge`,
 no overlap, nearest-first) → `PUT` on confirm.
 
 ### Phase 7 — Drag and drop
+*Needs O2 for appointment moves and O3 to reconcile a dropped waitlist card
+without a full refetch.*
 1. **Move an appointment:** `editable: true`, `eventStartEditable: true`,
    **`eventDurationEditable: false`** (this is the "position, not size"
    requirement), `snapDuration: '00:15'`. `eventDrop` calls
@@ -588,8 +740,9 @@ no overlap, nearest-first) → `PUT` on confirm.
    with an optimistic cache write in `onMutate` and `info.revert()` plus a
    notification in `onError`.
 2. **Waitlist → calendar:** `new Draggable(asideRef.current, { itemSelector:
-   '[data-waitlist-item]', eventData: el => ({ title: el.dataset.name, duration:
-   '00:30' }) })` from `@fullcalendar/interaction`, with `droppable: true` on the
+   '[data-waitlist-item]', eventData: el => ({ title: el.dataset.patientName,
+   duration: '00:30' }) })` from `@fullcalendar/interaction` — the field is
+   `patient_name`, not `name` — with `droppable: true` on the
    calendar. `eventReceive` → `POST /calendar-items`, then `DELETE
    /waitlist-items/{id}`, invalidating both queries. Guard the drop against
    overlapping an existing appointment — the brief says "open sections of the
@@ -647,7 +800,29 @@ failing request renders the error state.
 
 ---
 
-## 10. Definition of done
+## 10. Open items
+
+Four backend changes are still outstanding. All are specified in §2 and
+scheduled in Phase 0 — this table is the tracker to work down during the build.
+
+| # | Item | Where | Blocks | Done when |
+| --- | --- | --- | --- | --- |
+| **O1** | Add `CORSMiddleware` | §2.1 | Preview builds and any non-proxied access. Dev is covered by the Vite proxy (§2.6), so this is not urgent — but it fails *silently until deploy*, which is the worst time to find it | `OPTIONS` preflight returns `access-control-allow-*` headers for origin `localhost:5173` |
+| **O2** | Add `PUT /calendar-items/{item_id}` | §2.2 | **The real blocker.** Phase 6's reschedule and Phase 7's drag-to-move both dead-end without it | `PUT` appears in `/openapi.json` and returns the updated `CalendarItem` |
+| **O3** | `POST` endpoints return the created model | §2.4 | Optimistic inserts in Phase 7; without it every create needs a full refetch | `POST /calendar-items` responds with a `CalendarItem`, not `{"message": …}` |
+| **O4** | Seed ~30 realistic appointments | §2.5 | Nothing strictly — but it makes Phases 4–7 far easier to build and is the difference between a demo and two invisible zero-length events | `GET /calendar-items` returns ~30 items spanning the current week with non-zero durations |
+
+Two nice-to-haves worth raising with whoever owns the model, neither blocking:
+`duration_minutes` on `WaitListItem` (would replace Phase 7's hardcoded
+30-minute drop block) and `created_at` ("waiting since" copy on the card).
+
+**Resolved during planning:** `patient_id` on `WaitListItem` (now
+`{id, patient_name, patient_id, priority}`); the API port fixed at 8080; the
+`priority` rank-vs-magnitude question (rank — see §5.3).
+
+---
+
+## 11. Definition of done
 
 - Header reads **NoShow Planner** on the UMC blue bar.
 - Left sidebar: `Today` + Monday-first `DatePicker`, collapsible, state persisted.
@@ -661,3 +836,6 @@ failing request renders the error state.
 - Appointments drag to a new position and never resize; waitlist items drag onto
   free calendar space and become appointments.
 - `npm run lint`, `npm run typecheck`, `npm test`, and `npm run test:e2e` pass.
+- All four open items in §10 are closed, and `npm run gen:api` has been re-run
+  against the final OpenAPI document with no leftover MSW-only assumptions in
+  `src/api/`.

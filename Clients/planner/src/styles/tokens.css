@@ -1,0 +1,20 @@
+/* Semantic aliases over the Mantine palette, so appointment styling is
+   nameable rather than shade-numbered. Imported after Mantine's own CSS. */
+:root {
+  --color-event-bg: var(--mantine-color-umcBlue-1); /* ≈ #C3E3FD */
+  --color-event-border: var(--mantine-color-umcBlue-6); /* #298FF5 */
+  --color-event-text: var(--mantine-color-umcBlue-9);
+  --color-grid-line: var(--mantine-color-gray-3);
+  --color-ink: #011020;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--color-ink);
+}
