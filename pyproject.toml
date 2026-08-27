@@ -1,3 +1,7 @@
+[build-system]
+requires = ["uv_build>=0.12.6,<0.13"]
+build-backend = "uv_build"
+
 [project]
 name = "hackathon-agentic-ai"
 version = "0.1.0"
@@ -9,6 +13,9 @@ dependencies = [
     "pydantic-ai[duckduckgo]>2.0.0",
     "python-dotenv>=1.2.2",
 ]
+
+[tool.uv.build-backend]
+namespace=true
 
 [dependency-groups]
 dev = [
