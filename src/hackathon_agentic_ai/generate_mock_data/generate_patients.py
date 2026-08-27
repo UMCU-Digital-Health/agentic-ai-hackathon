@@ -17,8 +17,8 @@ from hackathon_agentic_ai.generate_mock_data.config import (
     RANDOM_SEED,
     SLOT_MINUTES,
 )
+from hackathon_agentic_ai.generate_mock_data.db_models import Patient
 from hackathon_agentic_ai.generate_mock_data.db_setup import get_session
-from no_showhackathon_agentic_ai_agent.generate_mock_data.db_models import Patient
 
 fake = Faker()
 Faker.seed(RANDOM_SEED)
