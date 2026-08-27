@@ -14,9 +14,6 @@ dependencies = [
     "python-dotenv>=1.2.2",
 ]
 
-[tool.uv.build-backend]
-namespace=true
-
 [dependency-groups]
 dev = [
     "ipykernel>=7.3.0",
