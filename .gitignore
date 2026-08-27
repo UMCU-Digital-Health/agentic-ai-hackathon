@@ -12,3 +12,6 @@ wheels/
 
 # MLFlow
 mlruns/
+
+#DB
+*.db
