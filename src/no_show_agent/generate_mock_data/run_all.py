@@ -15,10 +15,10 @@ Usage:
     python run_all.py
 """
 
-from no_show_agent.generate_mock_data.db_setup import create_schema
-from no_show_agent.generate_mock_data.generate_calendar import generate_calendar
-from no_show_agent.generate_mock_data.generate_patients import generate_patients
-from no_show_agent.generate_mock_data.generate_waitlist import generate_waitlist
+from hackathon_agentic_ai.generate_mock_data.db_setup import create_schema
+from hackathon_agentic_ai.generate_mock_data.generate_calendar import generate_calendar
+from hackathon_agentic_ai.generate_mock_data.generate_patients import generate_patients
+from hackathon_agentic_ai.generate_mock_data.generate_waitlist import generate_waitlist
 
 if __name__ == "__main__":
     create_schema()

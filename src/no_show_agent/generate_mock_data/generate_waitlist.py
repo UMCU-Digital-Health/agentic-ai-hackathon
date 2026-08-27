@@ -8,20 +8,19 @@ Requires patients and calendar to already exist.
 import random
 
 from faker import Faker
-from sqlmodel import select
-
-from no_show_agent.generate_mock_data.config import (
+from hackathon_agentic_ai.generate_mock_data.config import (
     APPOINTMENT_TYPES,
     N_WAITLIST_PATIENTS,
     RANDOM_SEED,
 )
-from no_show_agent.generate_mock_data.db_models import (
+from hackathon_agentic_ai.generate_mock_data.db_models import (
     CalendarAppointment,
     Patient,
     WaitlistEntry,
     WaitlistStatus,
 )
-from no_show_agent.generate_mock_data.db_setup import get_session
+from hackathon_agentic_ai.generate_mock_data.db_setup import get_session
+from sqlmodel import select
 
 fake = Faker()
 Faker.seed(RANDOM_SEED)

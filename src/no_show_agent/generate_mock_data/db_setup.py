@@ -6,12 +6,11 @@ those classes, so there's exactly one definition of each table.
 Run this first, before any of the generate_*.py scripts.
 """
 
-from sqlmodel import Session, SQLModel, create_engine
-
-from no_show_agent.generate_mock_data import (
+from hackathon_agentic_ai.generate_mock_data import (
     db_models,  # noqa: F401  (registers the tables below)
 )
-from no_show_agent.generate_mock_data.config import DB_PATH
+from hackathon_agentic_ai.generate_mock_data.config import DB_PATH
+from sqlmodel import Session, SQLModel, create_engine
 
 _engine = None
 

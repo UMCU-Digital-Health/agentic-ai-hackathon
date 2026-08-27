@@ -9,9 +9,7 @@ import random
 from datetime import date, datetime, timedelta
 
 from faker import Faker
-from sqlmodel import select
-
-from no_show_agent.generate_mock_data.config import (
+from hackathon_agentic_ai.generate_mock_data.config import (
     APPOINTMENT_DATE,
     APPOINTMENT_TYPES,
     CLINIC_CLOSE,
@@ -21,12 +19,13 @@ from no_show_agent.generate_mock_data.config import (
     RANDOM_SEED,
     SLOT_MINUTES,
 )
-from no_show_agent.generate_mock_data.db_models import (
+from hackathon_agentic_ai.generate_mock_data.db_models import (
     AppointmentStatus,
     CalendarAppointment,
     Patient,
 )
-from no_show_agent.generate_mock_data.db_setup import get_session
+from hackathon_agentic_ai.generate_mock_data.db_setup import get_session
+from sqlmodel import select
 
 fake = Faker()
 Faker.seed(RANDOM_SEED)
