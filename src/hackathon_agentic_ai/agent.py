@@ -11,6 +11,7 @@ import asyncio
 
 from hackathon_agentic_ai.api.pydantic_models import (
     AppointmentStatus,
+    AgentJobStatus,
     CalendarItemInput,
     MessageInput,
     AgentJobInput,
@@ -160,12 +161,6 @@ async def delete_agent_job(job_id: int) -> dict:
         response.raise_for_status()
         return response.json()
 
-@agent.tool_plain
-def get_current_time(timezone: str = "CET") -> str:
-    """Get the current time as a string."""
-
-    tz = pytz.timezone(timezone)
-    return datetime.now(tz).isoformat()
 
 async def call_agent(prompt: str, explain: bool = False) -> None:
     """Call the agent with a prompt and print the output."""
@@ -175,3 +170,55 @@ async def call_agent(prompt: str, explain: bool = False) -> None:
     if explain:
         print()
         print(result.all_messages())
+
+
+async def run_job_loop(max_iterations: int = 5) -> None:
+    """Poll agent jobs and execute any open ones, up to max_iterations times."""
+    for i in range(max_iterations):
+        print(f"\n[Loop {i + 1}/{max_iterations}] Checking for open agent jobs...")
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{BASE_URL}/agent-jobs")
+            response.raise_for_status()
+            jobs = response.json()
+
+        open_jobs = [j for j in jobs if j["status"] == AgentJobStatus.CREATED]
+
+        if not open_jobs:
+            print("No open jobs found.")
+        else:
+            for job in open_jobs:
+                print(f"Executing job {job['id']}: {job['job_type']}")
+
+                if job["job_type"] == "first_action":
+                    prompt = (
+                        "You are an agent that needs to perform the first action in a "
+                        "and sequence of tasks. first, set the status of the current job "
+                        "to in progress. Then use the tools available to you to "
+                        "contact the person with the highest priority, send them a "
+                        "message, asking if they are available at the time of the free"
+                        "spot, and set the status of the job to completed."
+                    )
+                elif job["job_type"] == "message_received":
+                    prompt = (
+                        "You are an agent that needs to perform the second action in a "
+                        "sequence of tasks. There is a reaction of the patient to the "
+                        " message sent in a previous action. You need to read the "
+                        "message and determine if the patient is available at the time "
+                        "of the free spot. If they are available, you need to check if "
+                        "the spot is still open, and if so schedule them for it and "
+                        "set the status of the job to completed. If they are not "
+                        "available, close the conversation in a polite manner and set "
+                        "the job to completed."
+                    )
+                else:
+                    raise ValueError(f"Unknown job type: {job['job_type']}")
+
+
+                await call_agent(
+                    f"Execute the following agent job (id={job['id']}): {prompt}",
+                )
+
+
+if __name__ == "__main__":
+    asyncio.run(run_job_loop())
