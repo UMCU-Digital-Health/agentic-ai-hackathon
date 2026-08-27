@@ -10,11 +10,13 @@ from pydantic_ai.capabilities import WebSearch
 import asyncio
 
 from hackathon_agentic_ai.api.pydantic_models import (
-    AppointmentStatus,
+    AgentJobInput,
     AgentJobStatus,
+    AgentJobType,
+    AppointmentStatus,
     CalendarItemInput,
     MessageInput,
-    AgentJobInput,
+    MessageRole,
     WaitListItemInput,
 )
 
@@ -135,7 +137,9 @@ async def get_recent_messages(patient_id: int, message_id: int) -> list:
 
 
 @agent.tool_plain
-async def create_message(patient_id: int, role: str, content: str) -> dict:
+async def create_message(
+    patient_id: int, role: MessageRole, content: str
+) -> dict:
     """Send a message to a patient."""
     async with httpx.AsyncClient() as client:
         response = await client.post(
@@ -144,7 +148,7 @@ async def create_message(patient_id: int, role: str, content: str) -> dict:
                 patient_id=patient_id,
                 role=role,
                 content=content,
-            ).model_dump(),
+            ).model_dump(mode="json"),
         )
         response.raise_for_status()
         return response.json()
@@ -160,12 +164,12 @@ async def get_agent_jobs() -> list:
 
 
 @agent.tool_plain
-async def create_agent_job(job_type: str) -> dict:
+async def create_agent_job(job_type: AgentJobType) -> dict:
     """Create a new agent job."""
     async with httpx.AsyncClient() as client:
         response = await client.post(
             f"{BASE_URL}/agent-jobs",
-            json=AgentJobInput(job_type=job_type).model_dump(),
+            json=AgentJobInput(job_type=job_type).model_dump(mode="json"),
         )
         response.raise_for_status()
         return response.json()
