@@ -16,3 +16,20 @@ dev = [
     "ipywidgets>=8.1.8",
     "nbstripout>=0.9.1",
 ]
+
+[tool.ruff.lint]
+select = [
+    "B",    # flake8-bugbear
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "C90",  # mccabe complexity
+    "I",    # isort
+    "ERA",  # Eradicate (commented out code)
+    "A",    # flake8-builtins (overwriting python builtins)
+    "PTH",  # flake8-use-pathlib
+    "N",    # pep8-naming
+    "D101", # pydocstyle: Missing docstring in class
+    "D102", # pydocstyle: Missing docstring in method
+    "D103", # pydocstyle: Missing docstring in function
+]
