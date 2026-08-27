@@ -11,6 +11,7 @@ DATA_DIR = PROJECT_ROOT / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "clinic.db"
 
+
 def _add_workdays(start: date, n: int) -> date:
     """Return the date n workdays (Mon-Fri) after start, skipping weekends."""
     current = start
@@ -20,6 +21,7 @@ def _add_workdays(start: date, n: int) -> date:
         if current.weekday() < 5:  # 0=Mon ... 4=Fri
             added += 1
     return current
+
 
 CLINIC_NAME = "Cardiology"
 APPOINTMENT_DATE = _add_workdays(date.today(), 3)
@@ -32,8 +34,13 @@ SLOT_MINUTES = 30
 N_PARALLEL_SLOTS = 3
 
 APPOINTMENT_TYPES = [
-    "Check-up", "Follow-up", "Consultation", "Vaccination",
-    "Physical Exam", "Skin Screening", "Lab Review",
+    "Check-up",
+    "Follow-up",
+    "Consultation",
+    "Vaccination",
+    "Physical Exam",
+    "Skin Screening",
+    "Lab Review",
 ]
 
 N_WAITLIST_PATIENTS = 40

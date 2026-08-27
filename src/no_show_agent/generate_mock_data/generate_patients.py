@@ -6,20 +6,20 @@ with a small buffer. Run db_setup.py first.
 """
 
 import random
-import sqlite3
+from datetime import date, datetime, timedelta
 
 from faker import Faker
 
 from no_show_agent.generate_mock_data.config import (
     CLINIC_CLOSE,
     CLINIC_OPEN,
-    DB_PATH,
     N_PARALLEL_SLOTS,
     N_WAITLIST_PATIENTS,
     RANDOM_SEED,
     SLOT_MINUTES,
 )
-from no_show_agent.generate_mock_data.models import Patient, to_db_row
+from no_show_agent.generate_mock_data.db_models import Patient
+from no_show_agent.generate_mock_data.db_setup import get_session
 
 fake = Faker()
 Faker.seed(RANDOM_SEED)
@@ -27,8 +27,6 @@ random.seed(RANDOM_SEED)
 
 
 def n_appointment_slots():
-    from datetime import date, datetime, timedelta
-
     slots = 0
     current = datetime.combine(date.today(), CLINIC_OPEN)
     end = datetime.combine(date.today(), CLINIC_CLOSE)
@@ -56,16 +54,9 @@ def generate_patients():
     total = n_appointment_slots() + N_WAITLIST_PATIENTS + 10
     patients = [make_patient(i) for i in range(1, total + 1)]
 
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.executemany(
-        """INSERT INTO patients VALUES
-        (:patient_id, :first_name, :last_name, :date_of_birth, :phone, :email,
-         :created_at)""",
-        [to_db_row(p) for p in patients],
-    )
-    conn.commit()
-    conn.close()
+    with get_session() as session:
+        session.add_all(patients)
+        session.commit()
 
     print(f"Inserted {len(patients)} patients")
     return patients

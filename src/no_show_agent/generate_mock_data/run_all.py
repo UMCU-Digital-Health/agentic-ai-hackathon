@@ -5,11 +5,11 @@ Runs the pipeline in the order that respects foreign keys:
     2. generate_patients -> fills patients
     3. generate_calendar -> fills calendar (needs patients)
     4. generate_waitlist -> fills waitlist (needs patients + calendar)
-    5. generate_messages -> fills messages (needs patients)
 
-agent_jobs is intentionally left EMPTY here: it's the queue your agent
-populates itself when it detects a cancellation. If you want to seed it
-with test data, run generate_agent_jobs.py separately.
+agent_jobs and messages are intentionally left EMPTY here: agent_jobs is
+the queue your agent populates itself when it detects a cancellation, and
+messages isn't ready to be mocked yet. Both tables still exist with all
+their columns, just no rows.
 
 Usage:
     python run_all.py
@@ -26,6 +26,6 @@ if __name__ == "__main__":
     generate_calendar()
     generate_waitlist()
     print(
-        "\npatients, calendar, waitlist, and messages populated. "
-        "agent_jobs created but left empty. See clinic.db"
+        "\npatients, calendar, and waitlist populated. "
+        "agent_jobs and messages created but left empty. See clinic.db"
     )
