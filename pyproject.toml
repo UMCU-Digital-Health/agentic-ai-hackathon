@@ -9,6 +9,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "faker>=40.37.0",
     "mlflow>=3.15.1",
     "pydantic-ai[duckduckgo]>2.0.0",
     "python-dotenv>=1.2.2",
