@@ -2,7 +2,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, FastAPI
 
-from no_show_agent.api.pydantic_models import (
+from hackathon_agentic_ai.api.pydantic_models import (
     AgentJob,
     AgentJobInput,
     AgentJobStatus,

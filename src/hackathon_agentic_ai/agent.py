@@ -9,7 +9,7 @@ from pydantic_ai.models.openai import OpenAIResponsesModelSettings
 from pydantic_ai.capabilities import WebSearch
 import asyncio
 
-from no_show_agent.api.pydantic_models import (
+from hackathon_agentic_ai.api.pydantic_models import (
     AppointmentStatus,
     CalendarItemInput,
     MessageInput,
