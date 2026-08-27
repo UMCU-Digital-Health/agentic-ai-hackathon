@@ -3,6 +3,7 @@ import type { components } from './schema'
 export type Message = components['schemas']['Message']
 export type MessageInput = components['schemas']['MessageInput']
 export type Patient = components['schemas']['Patient']
+export type WaitListItem = components['schemas']['WaitListItem']
 
 /**
  * `erasableSyntaxOnly` rules out TS enums, so roles are a const object plus a

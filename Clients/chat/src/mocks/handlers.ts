@@ -1,18 +1,18 @@
 import { HttpResponse, http } from 'msw'
 import type { Message, MessageInput } from '../api/types'
-import { makeMessages, makePatients } from './fixtures'
+import { makeMessages, makeWaitlist } from './fixtures'
 
 /**
  * One handler set, shared by Vitest (node) and Playwright (service worker).
  * State is mutable so a sent message shows up in the poll that follows it,
  * exactly as the real API behaves.
  */
-let patients = makePatients()
+let waitlist = makeWaitlist()
 let messages: Message[] = makeMessages()
 let nextId = 100
 
 export const resetMockData = () => {
-  patients = makePatients()
+  waitlist = makeWaitlist()
   messages = makeMessages()
   nextId = 100
 }
@@ -25,7 +25,7 @@ export const pushMockMessage = (input: MessageInput): Message => {
 }
 
 export const handlers = [
-  http.get('*/api/v1/patients', () => HttpResponse.json(patients)),
+  http.get('*/api/v1/waitlist-items', () => HttpResponse.json(waitlist)),
 
   http.get('*/api/v1/recent-messages/:patientId/:messageId', ({ params }) => {
     const patientId = Number(params.patientId)

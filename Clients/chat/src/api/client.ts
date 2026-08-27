@@ -20,7 +20,7 @@ export const api = createClient<paths>({
 
 /** Query keys, in one place so invalidation and reads can't drift apart. */
 export const queryKeys = {
-  patients: ['patients'] as const,
+  patients: ['waitlist-items'] as const,
   messages: (patientId: number | null) => ['messages', patientId] as const,
 }
 

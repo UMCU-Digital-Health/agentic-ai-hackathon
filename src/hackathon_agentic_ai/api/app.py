@@ -11,6 +11,7 @@ from hackathon_agentic_ai.api.pydantic_models import (
     AgentJob,
     AgentJobInput,
     AgentJobStatus,
+    AgentJobStatusInput,
     AgentJobType,
     AppointmentStatus,
     CalendarItem,
@@ -394,6 +395,121 @@ async def create_calendar_item(
     return {"message": f"Calendar item '{item.title}' created successfully."}
 
 
+@router.put("/calendar-items/{item_id}")
+async def update_calendar_item(
+    item_id: int, item: CalendarItemInput, db: Session = DB_SESSION
+) -> CalendarItem:
+    """
+    Endpoint to update an existing calendar item.
+    Replaces the calendar item identified by item_id with the supplied data
+    and returns the updated item.
+    Fails with 409 if another non-canceled appointment occupies the same slot.
+    """
+    appointment_date = item.start_time.date().isoformat()
+    start_hm = item.start_time.strftime("%H:%M")
+    end_hm = item.end_time.strftime("%H:%M")
+
+    existing = (
+        db
+        .execute(
+            text("SELECT appointment_id FROM calendar WHERE appointment_id = :id"),
+            {"id": item_id},
+        )
+        .mappings()
+        .first()
+    )
+    if not existing:
+        raise HTTPException(status_code=404, detail="Calendar item not found")
+
+    conflict = (
+        db
+        .execute(
+            text(
+                """
+            SELECT appointment_id
+            FROM calendar
+            WHERE appointment_date = :appointment_date
+              AND start_time = :start_time
+              AND end_time = :end_time
+              AND status != :canceled
+              AND appointment_id != :appointment_id
+            LIMIT 1
+            """
+            ),
+            {
+                "appointment_date": appointment_date,
+                "start_time": start_hm,
+                "end_time": end_hm,
+                "canceled": "canceled",
+                "appointment_id": item_id,
+            },
+        )
+        .mappings()
+        .first()
+    )
+    if conflict:
+        raise HTTPException(
+            status_code=409,
+            detail="There is already a non-canceled appointment at this time",
+        )
+
+    db.execute(
+        text(
+            """
+            UPDATE calendar
+            SET patient_id = :patient_id,
+                appointment_date = :appointment_date,
+                start_time = :start_time,
+                end_time = :end_time,
+                appointment_type = :appointment_type,
+                status = :status,
+                canceled_at = CASE
+                    WHEN :status = 'canceled'
+                    THEN COALESCE(canceled_at, CURRENT_TIMESTAMP)
+                    ELSE NULL
+                END
+            WHERE appointment_id = :appointment_id
+            """
+        ),
+        {
+            "patient_id": item.patient_id,
+            "appointment_date": appointment_date,
+            "start_time": start_hm,
+            "end_time": end_hm,
+            "appointment_type": item.title,
+            "status": item.status.value,
+            "appointment_id": item_id,
+        },
+    )
+    db.commit()
+
+    patient = (
+        db
+        .execute(
+            text(
+                "SELECT first_name, last_name FROM patients "
+                "WHERE patient_id = :patient_id"
+            ),
+            {"patient_id": item.patient_id},
+        )
+        .mappings()
+        .first()
+    )
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    start_dt, end_dt = _build_calendar_datetimes(appointment_date, start_hm, end_hm)
+    return CalendarItem(
+        id=item_id,
+        title=item.title,
+        patient_id=item.patient_id,
+        patient_name=f"{patient['first_name']} {patient['last_name']}",
+        start_time=start_dt,
+        end_time=end_dt,
+        status=item.status,
+    )
+
+
 @router.delete("/calendar-items/{item_id}")
 async def delete_calendar_item(item_id: int, db: Session = DB_SESSION) -> dict:
     """
@@ -575,55 +691,36 @@ async def create_message(message: MessageInput, db: Session = DB_SESSION) -> dic
     )
 
     if message.role == MessageRole.USER:
-        appointment = (
-            db
-            .execute(
-                text(
-                    """
-                SELECT appointment_id
-                FROM calendar
-                WHERE patient_id = :patient_id
-                ORDER BY appointment_date DESC, start_time DESC
-                LIMIT 1
+        db.execute(
+            text(
                 """
-                ),
-                {"patient_id": message.patient_id},
-            )
-            .mappings()
-            .first()
+                INSERT INTO agent_jobs (
+                    job_type,
+                    appointment_id,
+                    status,
+                    matched_waitlist_id,
+                    matched_patient_id,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    :job_type,
+                    :appointment_id,
+                    :status,
+                    NULL,
+                    :matched_patient_id,
+                    CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                "job_type": AgentJobType.MESSAGE_RECEIVED.value,
+                "appointment_id": 5,
+                "status": "pending",
+                "matched_patient_id": message.patient_id,
+            },
         )
-
-        if appointment:
-            db.execute(
-                text(
-                    """
-                    INSERT INTO agent_jobs (
-                        job_type,
-                        appointment_id,
-                        status,
-                        matched_waitlist_id,
-                        matched_patient_id,
-                        created_at,
-                        updated_at
-                    )
-                    VALUES (
-                        :job_type,
-                        :appointment_id,
-                        :status,
-                        NULL,
-                        :matched_patient_id,
-                        CURRENT_TIMESTAMP,
-                        CURRENT_TIMESTAMP
-                    )
-                    """
-                ),
-                {
-                    "job_type": AgentJobType.MESSAGE_RECEIVED.value,
-                    "appointment_id": appointment["appointment_id"],
-                    "status": "pending",
-                    "matched_patient_id": message.patient_id,
-                },
-            )
 
     db.commit()
     return {
@@ -642,7 +739,8 @@ async def get_agent_jobs(db: Session = DB_SESSION) -> list[AgentJob]:
         .execute(
             text(
                 """
-            SELECT job_id, job_type, status, created_at, updated_at
+            SELECT job_id, job_type, status, matched_patient_id,
+                   created_at, updated_at
             FROM agent_jobs
             ORDER BY job_id ASC
             """
@@ -664,6 +762,7 @@ async def get_agent_jobs(db: Session = DB_SESSION) -> list[AgentJob]:
                 id=row["job_id"],
                 job_type=job_type,
                 status=_to_api_job_status(row["status"]),
+                patient_id=row["matched_patient_id"],
                 created_at=row["created_at"],
                 updated_at=row["updated_at"],
             )
@@ -725,6 +824,39 @@ async def create_agent_job(job: AgentJobInput, db: Session = DB_SESSION) -> dict
     )
     db.commit()
     return {"message": f"Agent job '{job.job_type}' created successfully."}
+
+
+_DB_JOB_STATUS = {
+    AgentJobStatus.CREATED: "pending",
+    AgentJobStatus.IN_PROGRESS: "in_progress",
+    AgentJobStatus.COMPLETED: "completed",
+    AgentJobStatus.FAILED: "failed",
+}
+
+
+@router.patch("/agent-jobs/{job_id}")
+async def update_agent_job_status(
+    job_id: int, body: AgentJobStatusInput, db: Session = DB_SESSION
+) -> dict:
+    """
+    Endpoint to update the status of an agent job by its ID.
+    Returns a confirmation message upon success.
+    """
+    result = db.execute(
+        text(
+            """
+            UPDATE agent_jobs
+            SET status = :status,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE job_id = :job_id
+            """
+        ),
+        {"status": _DB_JOB_STATUS[body.status], "job_id": job_id},
+    )
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Agent job not found")
+    db.commit()
+    return {"message": f"Agent job {job_id} set to '{body.status.value}'."}
 
 
 @router.delete("/agent-jobs/{job_id}")

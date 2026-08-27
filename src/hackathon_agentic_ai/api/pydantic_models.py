@@ -9,6 +9,7 @@ class AppointmentStatus(str, Enum):
 
     SCHEDULED = "scheduled"
     CANCELED = "canceled"
+    COMPLETED = "completed"
 
 
 class AgentJobStatus(str, Enum):
@@ -104,6 +105,7 @@ class AgentJob(BaseModel):
     id: int
     job_type: AgentJobType
     status: AgentJobStatus
+    patient_id: int | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -112,3 +114,9 @@ class AgentJobInput(BaseModel):
     """Pydantic model representing input data for an agent job."""
 
     job_type: AgentJobType
+
+
+class AgentJobStatusInput(BaseModel):
+    """Pydantic model for updating the status of an agent job."""
+
+    status: AgentJobStatus

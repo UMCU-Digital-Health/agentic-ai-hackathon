@@ -24,3 +24,6 @@ export const queryKeys = {
   calendarItems: ['calendar-items'] as const,
   waitlist: ['waitlist-items'] as const,
 }
+
+/** Other users and the agent change the schedule too, so both lists poll. */
+export const REFRESH_INTERVAL_MS = 10_000

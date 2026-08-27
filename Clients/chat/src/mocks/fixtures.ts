@@ -1,10 +1,11 @@
-import type { Message, Patient } from '../api/types'
+import type { Message, WaitListItem } from '../api/types'
 
-export const makePatients = (): Patient[] => [
-  { id: 1, name: 'John Doe' },
-  { id: 2, name: 'Jane Smith' },
-  { id: 3, name: 'Pieter de Vries' },
-  { id: 6, name: 'Youssef Bakkali' },
+/** The waitlist is where the chat's patient list comes from. */
+export const makeWaitlist = (): WaitListItem[] => [
+  { id: 1, patient_id: 1, patient_name: 'John Doe', priority: 1 },
+  { id: 2, patient_id: 2, patient_name: 'Jane Smith', priority: 2 },
+  { id: 3, patient_id: 3, patient_name: 'Pieter de Vries', priority: 3 },
+  { id: 4, patient_id: 6, patient_name: 'Youssef Bakkali', priority: 4 },
 ]
 
 const at = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60_000).toISOString()

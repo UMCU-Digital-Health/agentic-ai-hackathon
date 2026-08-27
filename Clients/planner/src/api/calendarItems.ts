@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { CalendarItem } from './types'
-import { api, queryKeys } from './client'
+import { api, queryKeys, REFRESH_INTERVAL_MS } from './client'
 import { toApiDate } from './dates'
 
 const unwrap = <T,>(result: { data?: T; error?: unknown }): T => {
@@ -22,6 +22,7 @@ export const useCalendarItems = () =>
   useQuery({
     queryKey: queryKeys.calendarItems,
     queryFn: async () => unwrap(await api.GET('/api/v1/calendar-items')),
+    refetchInterval: REFRESH_INTERVAL_MS,
   })
 
 type Reschedule = { item: CalendarItem; start: Date; end: Date }
