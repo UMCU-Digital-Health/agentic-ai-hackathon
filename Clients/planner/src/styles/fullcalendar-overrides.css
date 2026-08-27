@@ -1,0 +1,78 @@
+/* FullCalendar's vendor CSS, pinned to our tokens.
+   Driven through its own --fc-* custom properties wherever possible rather
+   than by out-specifying its selectors. */
+.planner-calendar {
+  --fc-border-color: var(--color-grid-line);
+  --fc-page-bg-color: var(--mantine-color-white);
+  --fc-neutral-bg-color: var(--mantine-color-gray-0);
+  --fc-today-bg-color: var(--mantine-color-umcBlue-0);
+  --fc-now-indicator-color: var(--mantine-color-umcBlue-6);
+  --fc-event-bg-color: var(--color-event-bg);
+  --fc-event-border-color: var(--color-event-border);
+  --fc-event-text-color: var(--color-event-text);
+  font-size: var(--mantine-font-size-sm);
+}
+
+.planner-calendar .fc {
+  height: 100%;
+}
+
+.planner-calendar .fc-col-header-cell {
+  padding: 6px 0;
+  font-weight: 600;
+  background: var(--mantine-color-gray-0);
+}
+
+.planner-calendar .fc-col-header-cell.fc-day-today {
+  color: var(--mantine-color-umcBlue-7);
+}
+
+.planner-calendar .fc-timegrid-slot-label,
+.planner-calendar .fc-timegrid-axis {
+  color: var(--mantine-color-gray-6);
+  font-size: var(--mantine-font-size-xs);
+}
+
+.planner-calendar .fc-event {
+  border-left: 3px solid var(--color-event-border);
+  border-radius: var(--mantine-radius-sm);
+  overflow: hidden;
+  cursor: pointer;
+  /* Stub data can produce very short appointments; keep them clickable. */
+  min-height: 18px;
+}
+
+.planner-calendar .fc-event:focus-visible {
+  outline: 2px solid var(--mantine-color-umcIndigo-6);
+  outline-offset: 1px;
+}
+
+.planner-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 4px;
+  line-height: 1.2;
+  overflow: hidden;
+}
+
+.planner-chip__title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.planner-chip__time,
+.planner-chip__patient {
+  font-size: var(--mantine-font-size-xs);
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The month view has no room for three lines. */
+.planner-calendar .fc-daygrid-event .planner-chip__patient {
+  display: none;
+}

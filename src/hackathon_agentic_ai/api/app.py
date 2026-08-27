@@ -2,9 +2,11 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
+from hackathon_agentic_ai.api import store
 from hackathon_agentic_ai.api.pydantic_models import (
     AgentJob,
     AgentJobInput,
@@ -16,6 +18,7 @@ from hackathon_agentic_ai.api.pydantic_models import (
     Message,
     MessageInput,
     MessageRole,
+    Patient,
     WaitListItem,
     WaitListItemInput,
 )
@@ -72,6 +75,23 @@ DB_SESSION = Depends(get_session)
 
 
 app = FastAPI(title="No Show Agent API", version=VERSION)
+
+# Explicit origins: allow_origins=["*"] together with allow_credentials=True is
+# rejected by the browser, which is a confusing failure to debug. 5173/5174 are
+# the planner and chat dev servers, 4173/4174 their preview builds.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:4173",
+        "http://localhost:5174",
+        "http://localhost:4174",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 router = APIRouter(prefix="/api/v1")
 
 
@@ -118,7 +138,8 @@ async def create_waitlist_item(
     in the waitlist
     """
     existing_patient = (
-        db.execute(
+        db
+        .execute(
             text("SELECT patient_id FROM patients WHERE patient_id = :patient_id"),
             {"patient_id": item.patient_id},
         )
@@ -171,7 +192,8 @@ async def create_waitlist_item(
         )
 
     max_priority_result = (
-        db.execute(
+        db
+        .execute(
             text("SELECT COALESCE(MAX(priority), 0) AS max_priority FROM waitlist")
         )
         .mappings()
@@ -219,7 +241,8 @@ async def delete_waitlist_item(item_id: int, db: Session = DB_SESSION) -> dict:
     Returns a confirmation message upon successful deletion.
     """
     existing = (
-        db.execute(
+        db
+        .execute(
             text("SELECT waitlist_id FROM waitlist WHERE waitlist_id = :waitlist_id"),
             {"waitlist_id": item_id},
         )
@@ -244,7 +267,8 @@ async def get_calendar_items(db: Session = DB_SESSION) -> list[CalendarItem]:
     Returns a list of calendar items in JSON format.
     """
     calendar_rows = (
-        db.execute(
+        db
+        .execute(
             text(
                 """
             SELECT c.appointment_id,
@@ -302,7 +326,8 @@ async def create_calendar_item(
     end_hm = item.end_time.strftime("%H:%M")
 
     conflict = (
-        db.execute(
+        db
+        .execute(
             text(
                 """
             SELECT appointment_id
@@ -379,7 +404,8 @@ async def delete_calendar_item(item_id: int, db: Session = DB_SESSION) -> dict:
     furthermore adds an entry in the agent_jobs table
     """
     appointment = (
-        db.execute(
+        db
+        .execute(
             text(
                 "SELECT appointment_id FROM calendar "
                 "WHERE appointment_id = :appointment_id"
@@ -440,6 +466,15 @@ async def delete_calendar_item(item_id: int, db: Session = DB_SESSION) -> dict:
     }
 
 
+@router.get("/patients")
+async def get_patients() -> list[Patient]:
+    """
+    Endpoint to retrieve all known patients (id and name), used by the chat
+    client to populate its patient selector.
+    """
+    return store.patients()
+
+
 @router.get("/messages/{patient_id}")
 async def get_messages(patient_id: int, db: Session = DB_SESSION) -> list[Message]:
     """
@@ -447,7 +482,8 @@ async def get_messages(patient_id: int, db: Session = DB_SESSION) -> list[Messag
     Returns a list of messages in JSON format.
     """
     message_rows = (
-        db.execute(
+        db
+        .execute(
             text(
                 """
             SELECT message_id, patient_id, sender, message_text, sent_at
@@ -487,7 +523,8 @@ async def get_recent_messages(
     """
 
     recent_rows = (
-        db.execute(
+        db
+        .execute(
             text(
                 """
             SELECT message_id, patient_id, sender, message_text, sent_at
@@ -539,7 +576,8 @@ async def create_message(message: MessageInput, db: Session = DB_SESSION) -> dic
 
     if message.role == MessageRole.USER:
         appointment = (
-            db.execute(
+            db
+            .execute(
                 text(
                     """
                 SELECT appointment_id
@@ -600,7 +638,8 @@ async def get_agent_jobs(db: Session = DB_SESSION) -> list[AgentJob]:
     Returns a list of agent jobs in JSON format.
     """
     job_rows = (
-        db.execute(
+        db
+        .execute(
             text(
                 """
             SELECT job_id, job_type, status, created_at, updated_at
@@ -639,7 +678,8 @@ async def create_agent_job(job: AgentJobInput, db: Session = DB_SESSION) -> dict
     Accepts an AgentJob object in the request body and returns a confirmation message.
     """
     latest_appointment = (
-        db.execute(
+        db
+        .execute(
             text(
                 "SELECT appointment_id FROM calendar "
                 "ORDER BY appointment_id DESC LIMIT 1"
@@ -696,7 +736,8 @@ async def delete_agent_job(job_id: int, db: Session = DB_SESSION) -> dict:
     Returns a confirmation message upon successful deletion.
     """
     existing = (
-        db.execute(
+        db
+        .execute(
             text("SELECT job_id FROM agent_jobs WHERE job_id = :job_id"),
             {"job_id": job_id},
         )
