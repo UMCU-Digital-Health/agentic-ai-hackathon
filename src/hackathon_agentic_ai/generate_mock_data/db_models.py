@@ -84,6 +84,7 @@ class WaitlistEntry(ValidatedSQLModel, table=True):
     waitlist_id: Optional[int] = Field(default=None, primary_key=True)
     patient_id: int = Field(foreign_key="patients.patient_id")
     appointment_type: str
+    priority: int = Field(default=3)  # 1 = most urgent, higher = less urgent
     status: WaitlistStatus
     added_at: datetime
 
