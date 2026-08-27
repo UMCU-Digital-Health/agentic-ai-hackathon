@@ -31,7 +31,7 @@ settings = OpenAIResponsesModelSettings(
 # add your own custom tools (see example below).
 agent = Agent(
     f"azure:{deployment}",
-    instructions="Be concise, reply with one sentence.",
+    instructions="Be concise", # , reply with one sentence.
     capabilities=[Thinking(), WebSearch(local="duckduckgo")],
     model_settings=settings,
 )
@@ -49,12 +49,15 @@ async def get_waitlist_items() -> list:
 
 
 @agent.tool_plain
-async def create_waitlist_item(name: str) -> dict:
+async def create_waitlist_item(patient_name: str, patient_id: int) -> dict:
     """Add a new item to the waitlist."""
     async with httpx.AsyncClient() as client:
         response = await client.post(
             f"{BASE_URL}/waitlist-items",
-            json=WaitListItemInput(name=name).model_dump(),
+            json=WaitListItemInput(
+                patient_name=patient_name,
+                patient_id=patient_id,
+            ).model_dump(),
         )
         response.raise_for_status()
         return response.json()
@@ -84,7 +87,7 @@ async def create_calendar_item(
     patient_id: int,
     start_time: datetime,
     end_time: datetime,
-    status: str = "scheduled",
+    status: AppointmentStatus = AppointmentStatus.SCHEDULED,
 ) -> dict:
     """Create a new calendar item (appointment)."""
     async with httpx.AsyncClient() as client:
@@ -95,7 +98,7 @@ async def create_calendar_item(
                 patient_id=patient_id,
                 start_time=start_time,
                 end_time=end_time,
-                status=AppointmentStatus(status),
+                status=status,
             ).model_dump(mode="json"),
         )
         response.raise_for_status()
@@ -121,12 +124,27 @@ async def get_messages(patient_id: int) -> list:
 
 
 @agent.tool_plain
-async def create_message(patient_id: int, content: str) -> dict:
+async def get_recent_messages(patient_id: int, message_id: int) -> list:
+    """Get recent messages for a patient after a given message ID."""
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{BASE_URL}/recent-messages/{patient_id}/{message_id}"
+        )
+        response.raise_for_status()
+        return response.json()
+
+
+@agent.tool_plain
+async def create_message(patient_id: int, role: str, content: str) -> dict:
     """Send a message to a patient."""
     async with httpx.AsyncClient() as client:
         response = await client.post(
             f"{BASE_URL}/messages",
-            json=MessageInput(patient_id=patient_id, content=content).model_dump(),
+            json=MessageInput(
+                patient_id=patient_id,
+                role=role,
+                content=content,
+            ).model_dump(),
         )
         response.raise_for_status()
         return response.json()
@@ -195,8 +213,10 @@ async def run_job_loop(max_iterations: int = 5) -> None:
                         "You are an agent that needs to perform the first action in a "
                         "and sequence of tasks. first, set the status of the current "
                         "job to in progress. Then use the tools available to you to "
-                        "contact the person with the highest priority, send them a "
-                        "message, asking if they are available at the time of the free"
+                        "search the appointment calendar for a free spot, if there is "
+                        " one, contact the person with the highest priority from the "
+                        "waitlist and send them a message in understandable dutch, "
+                        "asking if they are available at the time of the free"
                         "spot, and set the status of the job to completed. "
                     )
                 elif job["job_type"] == "message_received":
