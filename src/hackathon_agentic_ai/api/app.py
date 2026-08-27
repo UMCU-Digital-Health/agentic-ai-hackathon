@@ -140,6 +140,31 @@ async def get_messages(patient_id: int) -> list[Message]:
     ]
 
 
+@router.get("/recent-messages/{patient_id}/{message_id}")
+async def get_recent_messages(patient_id: int, message_id: int) -> list[Message]:
+    """
+    Endpoint to retrieve recent messages for a specific patient starting from a specific message ID.
+    Returns a list of messages in JSON format.
+    """
+
+    recent_messages = [
+        Message(
+            id=2,
+            patient_id=patient_id,
+            content="Your appointment is confirmed.",
+            timestamp=datetime.now(),
+        ),
+        Message(
+            id=3,
+            patient_id=patient_id,
+            content="Your appointment has been canceled.",
+            timestamp=datetime.now(),
+        ),
+    ]
+
+    return [msg for msg in recent_messages if msg.id > message_id]
+
+
 @router.post("/messages")
 async def create_message(message: MessageInput) -> dict:
     """
