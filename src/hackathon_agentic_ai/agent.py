@@ -193,23 +193,24 @@ async def run_job_loop(max_iterations: int = 5) -> None:
                 if job["job_type"] == "first_action":
                     prompt = (
                         "You are an agent that needs to perform the first action in a "
-                        "and sequence of tasks. first, set the status of the current job "
-                        "to in progress. Then use the tools available to you to "
+                        "and sequence of tasks. first, set the status of the current "
+                        "job to in progress. Then use the tools available to you to "
                         "contact the person with the highest priority, send them a "
                         "message, asking if they are available at the time of the free"
-                        "spot, and set the status of the job to completed."
+                        "spot, and set the status of the job to completed. "
                     )
                 elif job["job_type"] == "message_received":
                     prompt = (
                         "You are an agent that needs to perform the second action in a "
-                        "sequence of tasks. There is a reaction of the patient to the "
+                        "sequence of tasks. First, set the status of the current job "
+                        "to in progress. There is a reaction of the patient to the "
                         " message sent in a previous action. You need to read the "
                         "message and determine if the patient is available at the time "
                         "of the free spot. If they are available, you need to check if "
                         "the spot is still open, and if so schedule them for it and "
                         "set the status of the job to completed. If they are not "
                         "available, close the conversation in a polite manner and set "
-                        "the job to completed."
+                        "the job to failed. "
                     )
                 else:
                     raise ValueError(f"Unknown job type: {job['job_type']}")

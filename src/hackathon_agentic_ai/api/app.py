@@ -192,14 +192,14 @@ async def get_agent_jobs() -> list[AgentJob]:
     return [
         AgentJob(
             id=1,
-            job_type="No Show Follow-up",
+            job_type="first_action",
             status=AgentJobStatus.CREATED,
             created_at=datetime.now(),
             updated_at=datetime.now(),
         ),
         AgentJob(
             id=2,
-            job_type="Appointment Reminder",
+            job_type="message_received",
             status=AgentJobStatus.IN_PROGRESS,
             created_at=datetime.now(),
             updated_at=datetime.now(),
