@@ -149,13 +149,13 @@ async def get_recent_messages(patient_id: int, message_id: int) -> list[Message]
 
     recent_messages = [
         Message(
-            id=2,
+            id=3,
             patient_id=patient_id,
             content="Your appointment is confirmed.",
             timestamp=datetime.now(),
         ),
         Message(
-            id=3,
+            id=4,
             patient_id=patient_id,
             content="Your appointment has been canceled.",
             timestamp=datetime.now(),
