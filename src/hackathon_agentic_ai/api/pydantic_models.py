@@ -20,18 +20,28 @@ class AgentJobStatus(str, Enum):
     FAILED = "failed"
 
 
+class MessageRole(str, Enum):
+    """Enumeration of possible message roles."""
+
+    SYSTEM = "system"
+    USER = "user"
+    ASSISTANT = "assistant"
+
+
 class WaitListItem(BaseModel):
     """Pydantic model representing a waitlist item."""
 
     id: int
-    name: str
+    patient_name: str
+    patient_id: int
     priority: int
 
 
 class WaitListItemInput(BaseModel):
     """Pydantic model representing input data for a waitlist item."""
 
-    name: str
+    patient_name: str
+    patient_id: int
 
 
 class CalendarItem(BaseModel):
@@ -61,6 +71,7 @@ class Message(BaseModel):
 
     id: int
     patient_id: int
+    role: MessageRole
     content: str
     timestamp: datetime
 
@@ -69,6 +80,7 @@ class MessageInput(BaseModel):
     """Pydantic model representing input data for a message."""
 
     patient_id: int
+    role: MessageRole
     content: str
 
 
