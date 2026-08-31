@@ -1,0 +1,88 @@
+HOLTERREGISTRATIE
+
+Patiënt: D. Duck
+Geboortedatum: 9 juni 1934
+BSN:
+
+Aanvrager: Dr. S. de Vries, huisarts
+
+Indicatie:
+Episoden van hartkloppingen en incidentele duizeligheid
+
+Registratiegegevens
+
+Opnameduur: 47 uur en 52 minuten
+Beoordeelbare registratieduur: 47 uur en 18 minuten (98,8%)
+Basisritme: Overwegend sinusritme
+Totaal aantal geanalyseerde hartslagen: 204.510
+Minimale hartfrequentie: 43 slagen per minuut, gedurende de nacht
+Gemiddelde hartfrequentie: 72 slagen per minuut
+Maximale hartfrequentie: 164 slagen per minuut, tijdens een korte supraventriculaire tachycardie
+
+Supraventriculaire ritmestoornissen
+
+Er werden 2.486 supraventriculaire extrasystolen geregistreerd, overeenkomend met ongeveer 1,2% van het totale aantal hartslagen.
+
+Hierbij werden 173 coupletten en 21 korte supraventriculaire runs gezien.
+
+De langste supraventriculaire tachycardie bestond uit 34 opeenvolgende slagen met een gemiddelde frequentie van 148 slagen per minuut.
+
+De snelste run bestond uit 11 slagen met een maximale frequentie van 164 slagen per minuut.
+
+Daarnaast werden twee episoden geregistreerd die passen bij paroxysmaal atriumfibrilleren.
+
+De totale duur hiervan bedroeg 22 minuten en 14 seconden, overeenkomend met een atriumfibrillerenbelasting van ongeveer 0,8%.
+
+De langste episode duurde 14 minuten en 36 seconden.
+
+De ventriculaire frequentie tijdens deze episoden varieerde tussen 88 en 152 slagen per minuut.
+
+Ventriculaire ritmestoornissen
+
+Er werden 612 ventriculaire extrasystolen geregistreerd, overeenkomend met ongeveer 0,3% van het totale aantal hartslagen.
+
+Deze waren overwegend monomorf van aard.
+
+Er werden negen ventriculaire coupletten gezien.
+
+Er waren geen episodes van aanhoudende ventriculaire tachycardie.
+
+Ook werden geen runs van non-sustained ventriculaire tachycardie geregistreerd.
+
+Geleiding en pauzes
+
+Er waren geen aanwijzingen voor een hooggradig atrioventriculair blok.
+
+De langste geregistreerde RR-pauze bedroeg 2,1 seconden en trad gedurende de nacht op.
+
+Er werden geen pauzes langer dan 2,5 seconden gezien.
+
+Symptoomregistratie
+
+Patiënt noteerde vier klachtenmomenten:
+
+- Twee episoden met hartkloppingen. Eén hiervan viel samen met een korte supraventriculaire tachycardie en één met een episode passend bij atriumfibrilleren.
+- Eén moment van duizeligheid tijdens regulier sinusritme met een hartfrequentie van 76 slagen per minuut.
+- Eén moment van een onrustig gevoel op de borst, samenvallend met meerdere supraventriculaire extrasystolen.
+
+Technische kwaliteit
+
+De registratie was van goede kwaliteit.
+
+Ongeveer 0,6% van de registratie was door bewegingsartefacten niet betrouwbaar te beoordelen.
+
+ST-segmentanalyse en beoordeling van het QTc-interval zijn op basis van deze Holterregistratie niet betrouwbaar verricht.
+
+Conclusie
+
+Overwegend sinusritme met een gemiddelde hartfrequentie van 72 slagen per minuut.
+
+Er is sprake van supraventriculaire ectopie met meerdere korte supraventriculaire tachycardieën.
+
+Tevens werden twee episoden geregistreerd die passen bij paroxysmaal atriumfibrilleren, waarvan één samenviel met door patiënt aangegeven hartkloppingen.
+
+Er is een geringe ventriculaire extrasystolie zonder aanhoudende ventriculaire ritmestoornissen.
+
+Er werden geen klinisch relevante pauzes of hooggradige geleidingsstoornissen geregistreerd.
+
+Gezien de geregistreerde supraventriculaire ritmestoornissen en de symptomatische episode wordt poliklinische beoordeling door het hartritmeteam geadviseerd.
